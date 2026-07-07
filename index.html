@@ -1395,6 +1395,7 @@ function persist(){
 }
 
 function loadInitial(){
+  render(); // mostra defaults imediatamente, sem esperar Firebase
   firebase.auth().onAuthStateChanged(user => {
     if (!user) return;
     STATE_REF.once('value').then(snap => {
@@ -1404,13 +1405,10 @@ function loadInitial(){
           STATE = parsed;
           if (typeof STATE.locked !== 'boolean') STATE.locked = false;
           if (typeof STATE.password === 'undefined') STATE.password = null;
+          render(); // re-renderiza com dados salvos
         }
       }
-      render();
-    }).catch(err => {
-      console.error('Erro ao carregar', err);
-      render();
-    });
+    }).catch(err => console.error('Erro ao carregar', err));
   });
 }
 
