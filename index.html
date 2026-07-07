@@ -980,14 +980,20 @@ function initials(name){
 function countDay(day){
   const d = STATE.volumoso.days[day];
   let n = 0;
-  STATE.volumoso.order.forEach(a => { d[a].forEach(x => { if (typeof x === 'string') n++; }); });
+  STATE.volumoso.order.forEach(a => {
+    const arr = d[a];
+    if (Array.isArray(arr)) arr.forEach(x => { if (typeof x === 'string') n++; });
+  });
   return n;
 }
+
+const DAY_ORDER = ['SEGUNDA', 'TERÇA', 'QUARTA A SEXTA', 'SÁBADO'];
 
 function renderDayTabs(){
   const el = document.getElementById('dayTabs');
   el.innerHTML = '';
-  Object.keys(STATE.volumoso.days).forEach(day=>{
+  const days = DAY_ORDER.filter(d => STATE.volumoso.days && STATE.volumoso.days[d] !== undefined && STATE.volumoso.days[d] !== null);
+  days.forEach(day=>{
     const btn = document.createElement('button');
     btn.className = 'day-tab' + (day===currentDay ? ' active':'');
     btn.innerHTML = day + '<span class="count">'+countDay(day)+'</span>';
@@ -1075,6 +1081,7 @@ function chipHTML(text, colorStr){
 }
 
 function areaCardHTML(title, iconKey, items, color, formKey){
+  if (!Array.isArray(items)) items = [];
   let body = '';
   if(!items.length){
     body = '<div class="empty-note">Sem colaborador definido.</div>';
@@ -1402,6 +1409,30 @@ function persist(){
   STATE_REF.set(STATE).catch(err => console.error('Falha ao salvar', err));
 }
 
+function fixFirebaseArrays(state) {
+  if (!state || !state.volumoso) return state;
+  // Firebase drops empty arrays; restore them and ensure all arrays are real arrays
+  if (!Array.isArray(state.volumoso.order)) {
+    state.volumoso.order = state.volumoso.order ? Object.values(state.volumoso.order) : DEFAULT_VOLUMOSO.order.slice();
+  }
+  DAY_ORDER.forEach(day => {
+    if (!state.volumoso.days[day]) state.volumoso.days[day] = {};
+    state.volumoso.order.forEach(area => {
+      const v = state.volumoso.days[day][area];
+      if (!Array.isArray(v)) {
+        state.volumoso.days[day][area] = v ? Object.values(v) : [];
+      }
+    });
+  });
+  if (!Array.isArray(state.expedicao)) {
+    state.expedicao = state.expedicao ? Object.values(state.expedicao) : clone(DEFAULT_EXPEDICAO);
+  }
+  state.expedicao.forEach(role => {
+    if (!Array.isArray(role.people)) role.people = role.people ? Object.values(role.people) : [];
+  });
+  return state;
+}
+
 function loadInitial(){
   render(); // mostra defaults imediatamente, sem esperar Firebase
   firebase.auth().onAuthStateChanged(user => {
@@ -1410,7 +1441,7 @@ function loadInitial(){
       if (snap.exists()) {
         const parsed = snap.val();
         if (parsed && parsed.volumoso && parsed.expedicao) {
-          STATE = parsed;
+          STATE = fixFirebaseArrays(parsed);
           if (typeof STATE.locked !== 'boolean') STATE.locked = false;
           if (typeof STATE.password === 'undefined') STATE.password = null;
           render(); // re-renderiza com dados salvos
